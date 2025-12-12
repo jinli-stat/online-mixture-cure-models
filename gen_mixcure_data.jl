@@ -1,21 +1,5 @@
 using Random, Distributions, DataFrames, LinearAlgebra
 
-"""
-    simdat_cox_cure(n, alphas, betas; baseline="case1", cens_rate_param=0.05, seed=nothing)
-
-Simulate survival data under mixture Cox models.
-
-# Arguments
-- `n::Int`: Sample size.
-- `alphas::Vector{Float64}`: Coefficients for the cure (logistic) model, including intercept.
-- `betas::Vector{Float64}`: Coefficients for the Cox model.
-- `baseline::String`: Baseline hazard for the Cox model ("case1" or "case2").
-- `cens_rate_param::Float64`: Parameter for censoring rate (rate parameter for Exponential distribution).
-- `seed::Union{Int, Nothing}`: Random seed for reproducibility.
-
-# Returns
-- A NamedTuple `(data=simdata, cure_rate=cure_rate_sample, censor_rate=censor_rate_sample)`
-"""
 function simdat_cox_cure(n::Int, 
                          alphas::Vector{Float64}, 
                          betas::Vector{Float64};
