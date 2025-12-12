@@ -1,1 +1,1 @@
-# Online-mixture-cure-models
+# online-mixture-cure-models
