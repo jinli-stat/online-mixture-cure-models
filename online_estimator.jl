@@ -1,4 +1,4 @@
-using LinearAlgebra, Optim, Zygote, DataFrames, StatsFuns
+using LinearAlgebra, Optim, Zygote, DataFrames, StatsFuns, LineSearches
 
 struct estimate_result
     xi_1::Float64
@@ -16,6 +16,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
     p_x = length(initial_alpha)
     q_z = length(initial_beta)
+    j_g = length(initial_gamma)
     n_k = size(data, 1)
     
     x_names = ["x$(i)" for i in 0:(p_x-1)]
@@ -106,7 +107,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 return -(term_hist + term_L1 + term_pen) # Return Negative for Minimization
             end
 
-            res_alpha = optimize(obj_alpha, alpha_old, BFGS(), Optim.Options(iterations=50))
+            lower_a = fill(-4.0, p_x)
+            upper_a = fill(4.0, p_x)
+            alpha_old = clamp.(alpha_old, lower_a, upper_a)
+
+            res_alpha = optimize(obj_alpha, lower_a, upper_a, alpha_old, Fminbox(LBFGS()), Optim.Options(iterations=50))
             alpha_new = Optim.minimizer(res_alpha)
             
             # --- M-Step Part 2: Update Beta and Gamma ---
@@ -148,7 +153,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 return -(term_hist + term_L2 + term_pen)
             end
 
-            res_bg = optimize(obj_beta_gamma, vcat(beta_old, gamma_old), BFGS(), Optim.Options(iterations=50))
+            lower_bg = [fill(-4.0, q_z); fill(0.0, j_g)] 
+            upper_bg = [fill(4.0, q_z); fill(10.0, j_g)]
+            bg_old = clamp.(vcat(beta_old, gamma_old), lower_bg, upper_bg)
+
+            res_bg = optimize(obj_beta_gamma, lower_bg, upper_bg, bg_old, Fminbox(LBFGS()), Optim.Options(iterations=50))
             bg_new = Optim.minimizer(res_bg)
             beta_new = bg_new[1:q_z]
             gamma_new = bg_new[q_z+1 : end]
@@ -156,6 +165,10 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             # --- Check Convergence ---
             theta_new_vec = vcat(alpha_new, beta_new, gamma_new)
             diff_norm = norm(theta_new_vec - theta_old_vec)
+
+            # if maximum(abs.(theta_new_vec)) > 4.0
+            #     break
+            # end
             
             alpha_cur = alpha_new
             beta_cur = beta_new

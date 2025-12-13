@@ -25,10 +25,15 @@ function simdat_cox_cure(n::Int,
     # 'alphas' includes the intercept parameter
     p_x = length(alphas) - 1
 
-    # Generate normal random variables for predictors
-    X_covs = rand(Normal(0, 1), n, p_x)
-    # Add intercept column
-    X = hcat(ones(n), X_covs)
+    # cov_matrix_z[i, j] = 0.5^|i-j|
+    cov_matrix_x = [0.5^abs(i - j) for i in 1:(p_x-1), j in 1:(p_x-1)]
+    mu_vector_x = zeros(p_x-1)
+
+    mv_dist_x = MvNormal(mu_vector_x, cov_matrix_x)
+    X_continuous_covs = transpose(rand(mv_dist_x, n))
+    X_discrete_covs = rand(Bernoulli(0.5), n)
+
+    X = hcat(ones(n), X_discrete_covs, X_continuous_covs)
 
     # Calculate Uncured Probability
     eta_cure = X * alphas
@@ -40,12 +45,14 @@ function simdat_cox_cure(n::Int,
     # Generate Covariates Z for the Survival Model
     p_z = length(betas)
 
-    # cov_matrix[i, j] = 0.2^|i-j|
-    cov_matrix = [0.2^abs(i - j) for i in 1:p_z, j in 1:p_z]
-    mu_vector = zeros(p_z)
+    # cov_matrix_z[i, j] = 0.5^|i-j|
+    cov_matrix_z = [0.5^abs(i - j) for i in 1:(p_z-1), j in 1:(p_z-1)]
+    mu_vector_z = zeros(p_z-1)
 
-    mv_dist = MvNormal(mu_vector, cov_matrix)
-    Z = transpose(rand(mv_dist, n))
+    mv_dist_z = MvNormal(mu_vector_z, cov_matrix_z)
+    Z_continuous_covs = transpose(rand(mv_dist_z, n))
+    Z_discrete_covs = rand(Bernoulli(0.5), n)
+    Z = hcat(Z_discrete_covs, Z_continuous_covs)
 
     # Generate Event Times T
     U = rand(Uniform(0, 1), n)
@@ -90,11 +97,12 @@ function simdat_cox_cure(n::Int,
     )
 end
 
-# Sample usage
+
 # n = 1000
-# alphas_input = [1.0, -1.0, 1.0]
-# betas_input = [1.0, -1.0, 1.0]
-# result = simdat_cox_cure(n, alphas_input, betas_input, baseline="case1", cens_rate_param=0.05, seed=123)
+# alphas_input = [1.0, -1.0, 1.0,0,0,0,0,0]
+# betas_input = [1.0, -1.0, 1.0,0,0,0,0,0]
+# result = simdat_cox_cure(n, alphas_input, betas_input, baseline="case2", cens_rate_param=0.1, seed=123)
+# result = simdat_cox_cure(n, alphas_input, betas_input, baseline="case2", cens_rate_param=0.2, seed=123)
 # println("Cure Rate: ", result.cure_rate)
 # println("Censoring Rate: ", result.censor_rate)
 # println(first(result.data, 6))
