@@ -175,8 +175,8 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "scad"
-        param1 = [0.01, 0.05, 0.1]
-        param2 = [0.01, 0.05, 0.1]
+        param1 = [0.005, 0.01, 0.05, 0.07, 0.1]
+        param2 = [0.005, 0.01, 0.05, 0.07, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
