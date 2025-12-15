@@ -197,8 +197,8 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "scad"
-        param1 = [0.005, 0.01, 0.05, 0.07, 0.1]
-        param2 = [0.005, 0.01, 0.05, 0.07, 0.1]
+        param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
+        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
@@ -211,6 +211,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     best_alpha = best_result.alpha
     best_beta = best_result.beta
     best_gamma = best_result.gamma
+    # println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
 
     # Calculate new Hessian matrix
     H_current = log_likelihood(best_alpha, best_beta, best_gamma, data, knots; spl_order = spl_order, hess = true)
