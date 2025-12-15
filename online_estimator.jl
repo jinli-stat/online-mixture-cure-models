@@ -165,9 +165,13 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             # --- Check Convergence ---
             theta_new_vec = vcat(alpha_new, beta_new, gamma_new)
 
-            # if maximum(abs.(theta_new_vec)) > 4.0
-            #     break
-            # end
+            is_explosion = any(eachindex(theta_new_vec)) do i
+                diff = abs(theta_new_vec[i] - theta_old_vec[i])
+                return isnan(diff) || diff > 2.0
+            end
+            if is_explosion
+                break
+            end
             
             alpha_cur = alpha_new
             beta_cur = beta_new
