@@ -50,7 +50,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     function evaluate_tuning_param(xi_1, xi_2)
         # MM Algorithm
         alpha_cur, beta_cur, gamma_cur = initial_alpha, initial_beta, initial_gamma
-        for m in 1:1000
+        for m in 1:100
             alpha_old = copy(alpha_cur)
             beta_old = copy(beta_cur)
             gamma_old = copy(gamma_cur)
@@ -111,7 +111,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             upper_a = fill(4.0, p_x)
             alpha_old = clamp.(alpha_old, lower_a, upper_a)
 
-            res_alpha = optimize(obj_alpha, lower_a, upper_a, alpha_old, Fminbox(LBFGS()), Optim.Options(iterations=50))
+            res_alpha = optimize(obj_alpha, alpha_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             alpha_new = Optim.minimizer(res_alpha)
             
             # --- M-Step Part 2: Update Beta and Gamma ---
@@ -153,18 +153,17 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 return -(term_hist + term_L2 + term_pen)
             end
 
-            lower_bg = [fill(-4.0, q_z); fill(0.0, j_g)] 
+            lower_bg = [fill(-4.0, q_z); fill(1e-10, j_g)] 
             upper_bg = [fill(4.0, q_z); fill(10.0, j_g)]
             bg_old = clamp.(vcat(beta_old, gamma_old), lower_bg, upper_bg)
 
-            res_bg = optimize(obj_beta_gamma, lower_bg, upper_bg, bg_old, Fminbox(LBFGS()), Optim.Options(iterations=50))
+            res_bg = optimize(obj_beta_gamma, bg_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             bg_new = Optim.minimizer(res_bg)
             beta_new = bg_new[1:q_z]
             gamma_new = bg_new[q_z+1 : end]
             
             # --- Check Convergence ---
             theta_new_vec = vcat(alpha_new, beta_new, gamma_new)
-            diff_norm = norm(theta_new_vec - theta_old_vec)
 
             # if maximum(abs.(theta_new_vec)) > 4.0
             #     break
@@ -173,10 +172,16 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             alpha_cur = alpha_new
             beta_cur = beta_new
             gamma_cur = gamma_new
-            
-            if diff_norm < 1e-5
+
+            is_converged = !any(i -> abs(theta_new_vec[i] - theta_old_vec[i]) > 1e-5, eachindex(theta_new_vec))
+
+            if is_converged
                 break
             end
+            
+            # if diff_max .< 1e-5
+            #     break
+            # end
         end
 
         alpha_cur[abs.(alpha_cur) .< 1e-5] .= 0
