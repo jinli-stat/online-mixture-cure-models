@@ -167,3 +167,21 @@ function Mspline(x, spl_order, knots)
     
     return rec_basis
 end
+
+function get_true_params(p::Int)
+    alpha = zeros(p)
+    if p >= 3
+        alpha[1:3] .= [0.8, 0.8, -0.8]
+    else
+        alpha[1:p] .= [0.8, 0.8, -0.8][1:p]
+    end
+    
+    beta = zeros(p)
+    if p >= 3
+        beta[1:3] .= [0.8, -0.8, 0.8]
+    else
+        beta[1:p] .= [0.8, -0.8, 0.8][1:p]
+    end
+    
+    return alpha, beta
+end

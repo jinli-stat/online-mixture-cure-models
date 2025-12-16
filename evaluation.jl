@@ -1,3 +1,6 @@
+using Statistics
+using Survival
+
 function c_index(observed_time, delta, risk_score)
     # risk_score: beta * z
     n = length(observed_time)
@@ -32,41 +35,72 @@ function c_index(observed_time, delta, risk_score)
     return numerator / denominator
 end
 
-function auc_weighted(incidence_lp, W)
-    # incidence_lp: alpha^T * x
-    n = length(incidence_lp)
-
+function auc_td(case_scores::Vector{Float64}, case_weights::Vector{Float64}, control_scores::Vector{Float64}, control_weights::Vector{Float64})
     numerator = 0.0
     denominator = 0.0
-
-    @inbounds for i in 1:n
-        for j in 1:n
-            if i == j
-                continue
-            end
     
-            weight = W[i] * (1.0 - W[j])
-            
-            if weight <= 0.0
-                continue
-            end
-
-            denominator += weight
-            
-            # Compare predicted value alpha * x
-            if incidence_lp[i] > incidence_lp[j]
-                numerator += weight
-            elseif incidence_lp[i] == incidence_lp[j]
-                numerator += 0.5 * weight
-            end
-        end
-    end
-
-    if denominator == 0.0
+    n_case = length(case_scores)
+    n_control = length(control_scores)
+    
+    if n_case == 0 || n_control == 0
         return NaN
     end
 
+    for i in 1:n_case
+        score_i = case_scores[i]
+        w_i = case_weights[i]
+        
+        for j in 1:n_control
+            score_j = control_scores[j]
+            w_j = control_weights[j]
+            
+            weight_pair = w_i * w_j
+            denominator += weight_pair
+            
+            # Case (Uncured) 分数应该比 Control (Cured) 高
+            if score_i > score_j
+                numerator += weight_pair
+            elseif score_i == score_j
+                numerator += 0.5 * weight_pair
+            end
+        end
+    end
+    
+    if denominator == 0.0 return NaN end
     return numerator / denominator
+end
+
+function get_km_survival(km::KaplanMeier, t::Float64)
+    idx = searchsortedlast(km.events.time, t)
+    return idx == 0 ? 1.0 : km.survival[idx]
+end
+
+function compute_uno_data(T::Vector{Float64}, delta::Vector{Int}, scores::Vector{Float64}, eval_t::Float64)
+    censoring_status = 1 .- delta
+    km_censoring = fit(KaplanMeier, T, censoring_status)
+    
+    G_at_eval_t = max(get_km_survival(km_censoring, eval_t), 1e-5)
+    
+    case_scores = Float64[]
+    case_weights = Float64[]
+    control_scores = Float64[]
+    control_weights = Float64[]
+    
+    for i in 1:length(T)
+        G_Ti = max(get_km_survival(km_censoring, T[i]), 1e-5)
+        
+        if T[i] <= eval_t && delta[i] == 1
+            # Case Group
+            push!(case_scores, scores[i])
+            push!(case_weights, 1.0 / G_Ti)
+        elseif T[i] > eval_t
+            # Control Group
+            push!(control_scores, scores[i])
+            push!(control_weights, 1.0 / G_at_eval_t)
+        end
+    end
+    
+    return case_scores, case_weights, control_scores, control_weights
 end
 
 function model_evaluation(test_data, alpha_hat, beta_hat, gamma_hat, knots, spl_order)
@@ -82,28 +116,19 @@ function model_evaluation(test_data, alpha_hat, beta_hat, gamma_hat, knots, spl_
     observed_time = test_data.tobs
     delta_test = test_data.status
 
-    I_mat = Ispline(observed_time, spl_order, knots) 
-
     linear_pred = X_mat * alpha_hat
-    pi_val = 1.0 ./ (1.0 .+ exp.(-linear_pred))
-    
-    Lambda0 = transpose(I_mat) * gamma_hat 
-    
-    risk_score = Z_mat * beta_hat
-    exp_risk_score = exp.(risk_score)
-    
-    Su = exp.(-Lambda0 .* exp_risk_score)
-    
-    # Calculate Weights W_i
-    # W_i = delta + (1-delta) * (pi * Su) / (1 - pi + pi * Su)
 
-    denom = max.(1.0 .- pi_val .+ pi_val .* Su, 1e-15)
-    W = delta_test .+ (1.0 .- delta_test) .* (pi_val .* Su) ./ denom
+    risk_score = Z_mat * beta_hat
 
     c_hat = c_index(observed_time, delta_test, risk_score)
-    auc_hat = auc_weighted(linear_pred, W)
 
-    return (c_index = c_hat, auc = auc_hat)
+    eval_t = maximum(test_data.tobs[test_data.status .== 1]) 
+    
+    case_s, case_w, ctrl_s, ctrl_w = compute_uno_data(observed_time, delta_test, linear_pred, eval_t)
+    
+    td_auc = auc_td(case_s, case_w, ctrl_s, ctrl_w)
+
+    return (c_index = c_hat, auc = td_auc)
 end
 
 function calc_metrics(est::Vector{Float64}, true_val::Vector{Float64})
