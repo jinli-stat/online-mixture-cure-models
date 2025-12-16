@@ -98,18 +98,17 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 log_1_minus_pi = -eta .+ log_pi
                 
                 term_L1 = sum(W .* log_pi .+ (1.0 .- W) .* log_1_minus_pi)
-                if penalty=="none"
-                    term_pen = 0
-                elseif penalty=="scad"
-                    term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
-                end
-                # Penalty part (ignoring constants)
-                return -(term_hist + term_L1 + term_pen) # Return Negative for Minimization
-            end
 
-            lower_a = fill(-4.0, p_x)
-            upper_a = fill(4.0, p_x)
-            alpha_old = clamp.(alpha_old, lower_a, upper_a)
+                term_pen = 0.0 
+                if penalty == "scad"
+                    term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
+                elseif penalty == "none" && p_x >= 20
+                    # L2 penalty for high-dim cases to ensure numerical stability
+                    term_pen = - N_total * 0.5e-3 * sum(a.^2)
+                end
+
+                return -(term_hist + term_L1 + term_pen)
+            end
 
             res_alpha = optimize(obj_alpha, alpha_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             alpha_new = Optim.minimizer(res_alpha)
@@ -145,17 +144,16 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 term_L2 = sum(W .* (delta .* log_fu_bg .+ (1.0 .- delta) .* log_Su_bg))
                 
                 # Penalty on Beta
-                if penalty=="none"
-                    term_pen = 0
-                elseif penalty=="scad"
+                term_pen = 0.0 
+                if penalty == "scad"
                     term_pen = -N_total * sum(0.5 .* omega_beta .* (b.^2))
+                elseif penalty == "none" && p_x >= 20
+                    # L2 penalty for high-dim cases to ensure numerical stability
+                    term_pen = - N_total * 0.5e-3 * sum(b.^2)
                 end
+
                 return -(term_hist + term_L2 + term_pen)
             end
-
-            lower_bg = [fill(-4.0, q_z); fill(1e-10, j_g)] 
-            upper_bg = [fill(4.0, q_z); fill(10.0, j_g)]
-            bg_old = clamp.(vcat(beta_old, gamma_old), lower_bg, upper_bg)
 
             res_bg = optimize(obj_beta_gamma, bg_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             bg_new = Optim.minimizer(res_bg)
@@ -211,7 +209,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     best_alpha = best_result.alpha
     best_beta = best_result.beta
     best_gamma = best_result.gamma
-    # println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
+    println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
 
     # Calculate new Hessian matrix
     H_current = log_likelihood(best_alpha, best_beta, best_gamma, data, knots; spl_order = spl_order, hess = true)

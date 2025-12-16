@@ -105,3 +105,17 @@ function model_evaluation(test_data, alpha_hat, beta_hat, gamma_hat, knots, spl_
 
     return (c_index = c_hat, auc = auc_hat)
 end
+
+function calc_metrics(est::Vector{Float64}, true_val::Vector{Float64})
+    thresh = 1e-5
+    
+    est_active = abs.(est) .> thresh
+    true_active = abs.(true_val) .> thresh
+    
+    tp = sum(est_active .& true_active)
+    fp = sum(est_active .& (.!true_active))
+    
+    mse = sum((est .- true_val).^2)
+    
+    return tp, fp, mse
+end
