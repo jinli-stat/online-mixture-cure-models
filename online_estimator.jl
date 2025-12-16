@@ -154,8 +154,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
                 return -(term_hist + term_L2 + term_pen)
             end
-
-            res_bg = optimize(obj_beta_gamma, bg_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
+            res_bg = optimize(obj_beta_gamma, vcat(beta_old, gamma_old), LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             bg_new = Optim.minimizer(res_bg)
             beta_new = bg_new[1:q_z]
             gamma_new = bg_new[q_z+1 : end]
@@ -180,14 +179,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             if is_converged
                 break
             end
-            
-            # if diff_max .< 1e-5
-            #     break
-            # end
+
         end
 
-        alpha_cur[abs.(alpha_cur) .< 1e-5] .= 0
-        beta_cur[abs.(beta_cur) .< 1e-5] .= 0
+        alpha_cur[abs.(alpha_cur) .< 1e-4] .= 0
+        beta_cur[abs.(beta_cur) .< 1e-4] .= 0
         BIC_val = BayIC(alpha_cur, beta_cur, gamma_cur, n_k)
         return estimate_result(xi_1, xi_2, alpha_cur, beta_cur, gamma_cur, BIC_val)
     end
@@ -195,8 +191,8 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "scad"
-        param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
-        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
+        param1 = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+        param2 = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
@@ -209,7 +205,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     best_alpha = best_result.alpha
     best_beta = best_result.beta
     best_gamma = best_result.gamma
-    println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
+    # println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
 
     # Calculate new Hessian matrix
     H_current = log_likelihood(best_alpha, best_beta, best_gamma, data, knots; spl_order = spl_order, hess = true)
