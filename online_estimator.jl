@@ -104,7 +104,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                     term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
                 elseif penalty == "none" && p_x >= 20
                     # L2 penalty for high-dim cases to ensure numerical stability
-                    term_pen = - N_total * 0.5e-3 * sum(a.^2)
+                    term_pen = - N_total * 5e-4 * sum(a.^2)
                 end
 
                 return -(term_hist + term_L1 + term_pen)
@@ -149,7 +149,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                     term_pen = -N_total * sum(0.5 .* omega_beta .* (b.^2))
                 elseif penalty == "none" && p_x >= 20
                     # L2 penalty for high-dim cases to ensure numerical stability
-                    term_pen = - N_total * 0.5e-3 * sum(b.^2)
+                    term_pen = - N_total * 5e-4 * sum(b.^2)
                 end
 
                 return -(term_hist + term_L2 + term_pen)
@@ -191,8 +191,12 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "scad"
-        param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
-        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
+        param1 = exp10.(range(log10(0.001), log10(1.2 * sqrt(log(p_x)/N_total)), length=5))
+        param1 = round.(param1, digits=4)
+        param2 = exp10.(range(log10(0.001), log10(1.2 * sqrt(log(q_z)/N_total)), length=5))
+        param2 = round.(param2, digits=4)
+        # param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
+        # param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
