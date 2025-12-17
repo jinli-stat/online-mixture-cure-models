@@ -25,8 +25,8 @@ function simdat_cox_cure(n::Int,
     # 'alphas' includes the intercept parameter
     p_x = length(alphas) - 1
 
-    # cov_matrix_z[i, j] = 0.5^|i-j|
-    cov_matrix_x = [0.5^abs(i - j) for i in 1:(p_x-1), j in 1:(p_x-1)]
+    # cov_matrix_z[i, j] = 0.4^|i-j|
+    cov_matrix_x = [0.4^abs(i - j) for i in 1:(p_x-1), j in 1:(p_x-1)]
     mu_vector_x = zeros(p_x-1)
 
     mv_dist_x = MvNormal(mu_vector_x, cov_matrix_x)
@@ -97,6 +97,23 @@ function simdat_cox_cure(n::Int,
     )
 end
 
+function get_true_params(p::Int)
+    alpha = zeros(p)
+    if p >= 4
+        alpha[1:4] .= [0.8, 1.0, -0.8, 0.8]
+    else
+        alpha[1:p] .= [0.8, 1.0, -0.8, 0.8][1:p]
+    end
+    
+    beta = zeros(p)
+    if p >= 4
+        beta[1:4] .= [1.0, -0.8, 0.8, 0.8]
+    else
+        beta[1:p] .= [1.0, -0.8, 0.8, 0.8][1:p]
+    end
+    
+    return alpha, beta
+end
 
 # n = 1000
 # alphas_input = [1.0, -1.0, 1.0,0,0,0,0,0]

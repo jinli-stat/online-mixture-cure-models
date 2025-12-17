@@ -83,6 +83,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             # --- M-Step Part 1: Update Alpha ---
             
             function obj_alpha(a)
+                if penalty == "mic"
+                    pen_part = sum(penalty_mic(a, xi_1))
+                    a = a.* penalty_mic(a, xi_1)
+                end
+
                 term_hist = 0.0 # Historical term
                 if !isnothing(summary_stats)
                     theta_temp = vcat(a, beta_old, gamma_old)
@@ -102,9 +107,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 term_pen = 0.0 
                 if penalty == "scad"
                     term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
-                elseif penalty == "none" && p_x >= 20
+                elseif penalty == "mic"
+                    term_pen = -log(N_total) * pen_part
+                elseif penalty == "none" && p_x >= 10
                     # L2 penalty for high-dim cases to ensure numerical stability
-                    term_pen = - N_total * 5e-4 * sum(a.^2)
+                    term_pen = - N_total * 0.01 * sum(a.^2)
                 end
 
                 return -(term_hist + term_L1 + term_pen)
@@ -112,12 +119,21 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
             res_alpha = optimize(obj_alpha, alpha_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             alpha_new = Optim.minimizer(res_alpha)
+
+            if penalty == "mic"
+                alpha_new = alpha_new.* penalty_mic(alpha_new, xi_1)
+            end
             
             # --- M-Step Part 2: Update Beta and Gamma ---
         
             function obj_beta_gamma(bg_vec)
                 b = bg_vec[1:q_z]
                 g = bg_vec[q_z+1 : end]
+
+                if penalty == "mic"
+                    pen_part = sum(penalty_mic(b, xi_2))
+                    b = b.* penalty_mic(b, xi_2)
+                end
                 
                 # Constraint: Gamma must be positive (monotonic cumulative hazard)
                 if any(g .<= 0)
@@ -147,9 +163,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 term_pen = 0.0 
                 if penalty == "scad"
                     term_pen = -N_total * sum(0.5 .* omega_beta .* (b.^2))
+                elseif penalty == "mic"
+                    term_pen = -log(N_total) * pen_part
                 elseif penalty == "none" && p_x >= 20
                     # L2 penalty for high-dim cases to ensure numerical stability
-                    term_pen = - N_total * 5e-4 * sum(b.^2)
+                    term_pen = - N_total * 0.01 * sum(b.^2)
                 end
 
                 return -(term_hist + term_L2 + term_pen)
@@ -157,6 +175,9 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             res_bg = optimize(obj_beta_gamma, vcat(beta_old, gamma_old), LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
             bg_new = Optim.minimizer(res_bg)
             beta_new = bg_new[1:q_z]
+            if penalty == "mic"
+                beta_new = beta_new.* penalty_mic(beta_new, xi_2)
+            end
             gamma_new = bg_new[q_z+1 : end]
             
             # --- Check Convergence ---
@@ -182,19 +203,21 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
         end
 
-        alpha_cur[abs.(alpha_cur) .< 1e-4] .= 0
-        beta_cur[abs.(beta_cur) .< 1e-4] .= 0
+        alpha_cur[abs.(alpha_cur) .< 1e-3] .= 0
+        beta_cur[abs.(beta_cur) .< 1e-3] .= 0
         BIC_val = BayIC(alpha_cur, beta_cur, gamma_cur, n_k)
         return estimate_result(xi_1, xi_2, alpha_cur, beta_cur, gamma_cur, BIC_val)
     end
 
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
+    elseif penalty == "mic"
+        best_result = evaluate_tuning_param(10.0, 10.0)
     elseif penalty == "scad"
-        param1 = exp10.(range(log10(0.001), log10(1.2 * sqrt(log(p_x)/N_total)), length=5))
+        param1 = exp10.(range(log10(0.001), log10(1.5 * sqrt(log(p_x)/N_total) * (N_total / n_k)^0.35), length=5))
         param1 = round.(param1, digits=4)
-        param2 = exp10.(range(log10(0.001), log10(1.2 * sqrt(log(q_z)/N_total)), length=5))
-        param2 = round.(param2, digits=4)
+        param2 = exp10.(range(log10(0.001), log10(1.5 * sqrt(log(q_z)/N_total) * (N_total / n_k)^0.35), length=5))
+        param2 = round.(param2, digits=4) 
         # param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
         # param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec

@@ -1,16 +1,5 @@
 using Distributions, Random, DataFrames
 
-function penalty_scad(b_hat, tuning_param)
-    a_val = 3.7
-    abs_b_hat = abs(b_hat)
-    if abs_b_hat <= tuning_param
-        return tuning_param * abs_b_hat
-    elseif tuning_param < abs_b_hat <= a_val * tuning_param
-        return (2 * a_val * tuning_param * abs_b_hat - b_hat^2 - tuning_param^2) / (2 * (a_val - 1))
-    else
-        return (tuning_param^2 * (a_val + 1)) / 2
-    end
-end
 
 function scad_deriv(theta_val, lambda)
     abs_t = abs(theta_val)
@@ -24,23 +13,8 @@ function scad_deriv(theta_val, lambda)
     end
 end
 
-function penalty_mcp(b_hat, tuning_param)
-    a = 2.8
-    abs_beta = abs(b_hat)
-    if abs_beta <= a * tuning_param
-        return tuning_param * abs_beta - abs_beta^2 / (2 * a)
-    else
-        return (tuning_param^2 * a) / 2
-    end
-end
-
-function penalty_gselo(b_hat, tuning_param)
-    return 1 - safe_exp(-tuning_param * (b_hat^2))
-end
-
-function penalty_mic(b_hat, tuning_param)
-    temp_val = safe_exp(2 * tuning_param * b_hat^2)
-    return (temp_val - 1.0) / (temp_val + 1.0)
+function penalty_mic(theta_val, rho_temp)
+    return (exp.(2 * rho_temp * theta_val.^2) .- 1.0) ./ (exp.(2 * rho_temp * theta_val.^2) .+ 1)
 end
 
 function get_knots(arr, J0)
@@ -166,22 +140,4 @@ function Mspline(x, spl_order, knots)
     end
     
     return rec_basis
-end
-
-function get_true_params(p::Int)
-    alpha = zeros(p)
-    if p >= 3
-        alpha[1:3] .= [0.8, 0.8, -0.8]
-    else
-        alpha[1:p] .= [0.8, 0.8, -0.8][1:p]
-    end
-    
-    beta = zeros(p)
-    if p >= 3
-        beta[1:3] .= [0.8, -0.8, 0.8]
-    else
-        beta[1:p] .= [0.8, -0.8, 0.8][1:p]
-    end
-    
-    return alpha, beta
 end
