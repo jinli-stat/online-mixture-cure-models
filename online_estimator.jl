@@ -1,5 +1,4 @@
 using LinearAlgebra, Optim, Zygote, DataFrames, StatsFuns, LineSearches
-
 struct estimate_result
     xi_1::Float64
     xi_2::Float64
@@ -46,11 +45,17 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
         DF = count(!iszero, alpha_val) + count(!iszero, beta_val)
         return -2 * lkhd + DF * log(n)
     end
+    if penalty == "mic"
+        in_iters = 1
+    else
+        in_iters = 20
+    end
+    MAX_STEP = 0.3
 
     function evaluate_tuning_param(xi_1, xi_2)
         # MM Algorithm
         alpha_cur, beta_cur, gamma_cur = initial_alpha, initial_beta, initial_gamma
-        for m in 1:100
+        for m in 1:50
             alpha_old = copy(alpha_cur)
             beta_old = copy(beta_cur)
             gamma_old = copy(gamma_cur)
@@ -109,7 +114,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                     term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
                 elseif penalty == "mic"
                     term_pen = -log(N_total) * pen_part
-                elseif penalty == "none" && p_x >= 10
+                elseif penalty == "none" && p_x >= 30
                     # L2 penalty for high-dim cases to ensure numerical stability
                     term_pen = - N_total * 0.01 * sum(a.^2)
                 end
@@ -117,12 +122,15 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 return -(term_hist + term_L1 + term_pen)
             end
 
-            res_alpha = optimize(obj_alpha, alpha_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
+            res_alpha = optimize(obj_alpha, alpha_old, LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=in_iters); autodiff = :forward)
             alpha_new = Optim.minimizer(res_alpha)
 
             if penalty == "mic"
                 alpha_new = alpha_new.* penalty_mic(alpha_new, xi_1)
             end
+
+            diff_alpha = clamp.(alpha_new - alpha_old, -MAX_STEP, MAX_STEP)
+            alpha_new = alpha_old + diff_alpha
             
             # --- M-Step Part 2: Update Beta and Gamma ---
         
@@ -165,31 +173,39 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                     term_pen = -N_total * sum(0.5 .* omega_beta .* (b.^2))
                 elseif penalty == "mic"
                     term_pen = -log(N_total) * pen_part
-                elseif penalty == "none" && p_x >= 20
+                elseif penalty == "none" && p_x >= 30
                     # L2 penalty for high-dim cases to ensure numerical stability
                     term_pen = - N_total * 0.01 * sum(b.^2)
                 end
 
                 return -(term_hist + term_L2 + term_pen)
             end
-            res_bg = optimize(obj_beta_gamma, vcat(beta_old, gamma_old), LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=20); autodiff = :forward)
+            res_bg = optimize(obj_beta_gamma, vcat(beta_old, gamma_old), LBFGS(linesearch = LineSearches.BackTracking()), Optim.Options(iterations=in_iters); autodiff = :forward)
             bg_new = Optim.minimizer(res_bg)
             beta_new = bg_new[1:q_z]
+            gamma_new = bg_new[q_z+1 : end]
+
             if penalty == "mic"
                 beta_new = beta_new.* penalty_mic(beta_new, xi_2)
             end
-            gamma_new = bg_new[q_z+1 : end]
-            
+
+            diff_beta = clamp.(beta_new - beta_old, -MAX_STEP, MAX_STEP)
+            beta_new = beta_old + diff_beta
+
+            diff_gamma = clamp.(gamma_new - gamma_old, -MAX_STEP, MAX_STEP)
+            gamma_new = gamma_old + diff_gamma
+            gamma_new = max.(gamma_new, 1e-5)
+
             # --- Check Convergence ---
             theta_new_vec = vcat(alpha_new, beta_new, gamma_new)
 
-            is_explosion = any(eachindex(theta_new_vec)) do i
-                diff = abs(theta_new_vec[i] - theta_old_vec[i])
-                return isnan(diff) || diff > 2.0
-            end
-            if is_explosion
-                break
-            end
+            # is_explosion = any(eachindex(theta_new_vec)) do i
+            #     diff = abs(theta_new_vec[i] - theta_old_vec[i])
+            #     return isnan(diff) || diff > 1.0
+            # end
+            # if is_explosion
+            #     break
+            # end
             
             alpha_cur = alpha_new
             beta_cur = beta_new
@@ -200,11 +216,21 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             if is_converged
                 break
             end
-
         end
-
-        alpha_cur[abs.(alpha_cur) .< 1e-3] .= 0
-        beta_cur[abs.(beta_cur) .< 1e-3] .= 0
+        if penalty != "none"
+            for i in 1:p_x
+                if abs(alpha_cur[i] - initial_alpha[i]) > 0.5
+                    alpha_cur[i] = alpha_cur[i] + 0.5*(initial_alpha[i] - alpha_cur[i])
+                end
+            end
+            for i in 1:q_z
+                if abs(beta_cur[i] - initial_beta[i]) > 0.5
+                    beta_cur[i] = beta_cur[i] + 0.5*(initial_beta[i] - beta_cur[i])
+                end
+            end
+        end
+        alpha_cur[abs.(alpha_cur) .< 1e-5] .= 0
+        beta_cur[abs.(beta_cur) .< 1e-5] .= 0
         BIC_val = BayIC(alpha_cur, beta_cur, gamma_cur, n_k)
         return estimate_result(xi_1, xi_2, alpha_cur, beta_cur, gamma_cur, BIC_val)
     end
@@ -212,14 +238,18 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "mic"
-        best_result = evaluate_tuning_param(1.0, 1.0)
+        best_result = evaluate_tuning_param(2000, 2000)
     elseif penalty == "scad"
         # param1 = exp10.(range(log10(0.001), log10(2 * sqrt(log(p_x)/N_total) * (N_total / n_k)^0.35), length=5))
         # param1 = round.(param1, digits=4)
         # param2 = exp10.(range(log10(0.001), log10(2 * sqrt(log(q_z)/N_total) * (N_total / n_k)^0.35), length=5))
         # param2 = round.(param2, digits=4) 
-        param1 = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]
-        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
+
+        param1 = [0.001, 0.005, 0.01, 0.04, 0.06,0.09]
+        param2 = [0.001, 0.005, 0.01, 0.04, 0.06, 0.09]
+
+        # param1 = round.([0.001, 0.005, 0.01, 0.05, 0.09] .* (0.05 * p_x + 0.5), digits=4) 
+        # param2 = round.([0.001, 0.005, 0.01, 0.05, 0.09] .* (0.05 * q_z + 0.5), digits=4) 
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
@@ -228,6 +258,9 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
         best_idx = argmin(map(r -> r.criterion, tuning_results))
         best_result = tuning_results[best_idx]
+        
+        # xi_1 = xi_2 = 0.25
+        # best_result = evaluate_tuning_param(xi_1, xi_2)
     end
     best_alpha = best_result.alpha
     best_beta = best_result.beta

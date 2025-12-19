@@ -13,8 +13,17 @@ function scad_deriv(theta_val, lambda)
     end
 end
 
+function mic_deriv(theta_val, lambda)
+    abs_t = abs(theta_val)
+    return 8*lambda*abs_t*exp(2*lambda*abs_t^2)/(exp(2*lambda*abs_t^2)+1)^2
+end
+
+function safe_exp(x)
+    return exp(clamp(x, -100, 100))
+end
+
 function penalty_mic(theta_val, rho_temp)
-    return (exp.(2 * rho_temp * theta_val.^2) .- 1.0) ./ (exp.(2 * rho_temp * theta_val.^2) .+ 1)
+    return (safe_exp.(2 * rho_temp * theta_val.^2) .- 1.0) ./ (safe_exp.(2 * rho_temp * theta_val.^2) .+ 1)
 end
 
 function get_knots(arr, J0)
