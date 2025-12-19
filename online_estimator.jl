@@ -45,17 +45,19 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
         DF = count(!iszero, alpha_val) + count(!iszero, beta_val)
         return -2 * lkhd + DF * log(n)
     end
-    if penalty == "mic"
-        in_iters = 1
+    if penalty == "scad"
+        in_iters = 50
+        out_iters = 20
     else
-        in_iters = 20
+        in_iters = 1
+         out_iters = 500
     end
     MAX_STEP = 0.3
 
     function evaluate_tuning_param(xi_1, xi_2)
         # MM Algorithm
         alpha_cur, beta_cur, gamma_cur = initial_alpha, initial_beta, initial_gamma
-        for m in 1:50
+        for m in 1:out_iters
             alpha_old = copy(alpha_cur)
             beta_old = copy(beta_cur)
             gamma_old = copy(gamma_cur)
@@ -245,11 +247,11 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
         # param2 = exp10.(range(log10(0.001), log10(2 * sqrt(log(q_z)/N_total) * (N_total / n_k)^0.35), length=5))
         # param2 = round.(param2, digits=4) 
 
-        param1 = [0.001, 0.005, 0.01, 0.04, 0.06,0.09]
-        param2 = [0.001, 0.005, 0.01, 0.04, 0.06, 0.09]
+        # param1 = [0.001, 0.005, 0.01, 0.04, 0.06,0.09] #.* (10/30)
+        # param2 = [0.001, 0.005, 0.01, 0.04, 0.06, 0.09] # .* (q_z/20)
 
-        # param1 = round.([0.001, 0.005, 0.01, 0.05, 0.09] .* (0.05 * p_x + 0.5), digits=4) 
-        # param2 = round.([0.001, 0.005, 0.01, 0.05, 0.09] .* (0.05 * q_z + 0.5), digits=4) 
+        param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
+        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)

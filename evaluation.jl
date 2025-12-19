@@ -132,7 +132,7 @@ function model_evaluation(test_data, alpha_hat, beta_hat, gamma_hat, knots, spl_
 end
 
 function calc_metrics(est::Vector{Float64}, true_val::Vector{Float64})
-    thresh = 1e-5
+    thresh = 1e-4
     
     est_active = abs.(est) .> thresh
     true_active = abs.(true_val) .> thresh
