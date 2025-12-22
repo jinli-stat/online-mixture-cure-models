@@ -240,7 +240,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "mic"
-        best_result = evaluate_tuning_param(2000, 2000)
+        best_result = evaluate_tuning_param(n_k, n_k)
     elseif penalty == "scad"
         # param1 = exp10.(range(log10(0.001), log10(2 * sqrt(log(p_x)/N_total) * (N_total / n_k)^0.35), length=5))
         # param1 = round.(param1, digits=4)
