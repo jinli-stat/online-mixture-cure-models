@@ -17,6 +17,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     q_z = length(initial_beta)
     j_g = length(initial_gamma)
     n_k = size(data, 1)
+    mic_para = min(n_k, 2000)
     
     x_names = ["x$(i)" for i in 0:(p_x-1)]
     X_mat = Matrix(data[:, x_names])
@@ -200,15 +201,6 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
             # --- Check Convergence ---
             theta_new_vec = vcat(alpha_new, beta_new, gamma_new)
-
-            # is_explosion = any(eachindex(theta_new_vec)) do i
-            #     diff = abs(theta_new_vec[i] - theta_old_vec[i])
-            #     return isnan(diff) || diff > 1.0
-            # end
-            # if is_explosion
-            #     break
-            # end
-            
             alpha_cur = alpha_new
             beta_cur = beta_new
             gamma_cur = gamma_new
@@ -240,16 +232,9 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "mic"
-        best_result = evaluate_tuning_param(n_k, n_k)
+
+        best_result = evaluate_tuning_param(mic_para, mic_para)
     elseif penalty == "scad"
-        # param1 = exp10.(range(log10(0.001), log10(2 * sqrt(log(p_x)/N_total) * (N_total / n_k)^0.35), length=5))
-        # param1 = round.(param1, digits=4)
-        # param2 = exp10.(range(log10(0.001), log10(2 * sqrt(log(q_z)/N_total) * (N_total / n_k)^0.35), length=5))
-        # param2 = round.(param2, digits=4) 
-
-        # param1 = [0.001, 0.005, 0.01, 0.04, 0.06,0.09] #.* (10/30)
-        # param2 = [0.001, 0.005, 0.01, 0.04, 0.06, 0.09] # .* (q_z/20)
-
         param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
@@ -260,9 +245,6 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
 
         best_idx = argmin(map(r -> r.criterion, tuning_results))
         best_result = tuning_results[best_idx]
-        
-        # xi_1 = xi_2 = 0.25
-        # best_result = evaluate_tuning_param(xi_1, xi_2)
     end
     best_alpha = best_result.alpha
     best_beta = best_result.beta
