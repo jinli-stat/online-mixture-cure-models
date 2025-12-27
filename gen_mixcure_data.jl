@@ -1,8 +1,7 @@
 using Random, Distributions, DataFrames, LinearAlgebra
-
 function simdat_cox_cure(n::Int, 
-                         alphas::Vector{Float64}, 
-                         betas::Vector{Float64};
+                         alphas::AbstractVector{<:Real}, 
+                         betas::AbstractVector{<:Real};
                          baseline::String="case1", 
                          cens_rate_param::Float64=0.1,
                          disc_covs::Bool=false, 

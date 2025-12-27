@@ -49,9 +49,12 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     if penalty == "scad"
         in_iters = 50
         out_iters = 20
+    elseif penalty == "none" && p_x < 5
+        in_iters = 100
+        out_iters = 10
     else
         in_iters = 1
-         out_iters = 500
+        out_iters = 500
     end
     MAX_STEP = 0.3
 
