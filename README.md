@@ -1,8 +1,6 @@
 # Online Mixture Cure Models
 
-This repository contains the Julia implementation for OMCM method in "Online Mixture Cure Models for Large-scale Survival Data Streams" by Jin, Li, Hu, Tao, and Xiang Liming..
-
-> **Note**: If you use this code in your research, please cite the paper (see [Citation](#citation) below).
+This repository contains the Julia implementation for OMCM method in "Online Mixture Cure Models for Large-scale Survival Data Streams" by JIN Li, HU Tao, and XIANG Liming.
 
 ---
 
@@ -24,7 +22,7 @@ This repository contains the Julia implementation for OMCM method in "Online Mix
 
 ## Acknowledgments
 
-The spline function implementation in this repository is adapted from:
+The splines implementation in this repository is adapted from:
 
 > Qiu, M., & Hu, T. (2024). Bayesian transformation model for spatial partly interval-censored data. *Journal of Applied Statistics*, 51(11), 2139-2156.
 >
