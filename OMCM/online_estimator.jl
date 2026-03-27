@@ -12,12 +12,18 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                            summary_stats=nothing, 
                            penalty="none", 
                            spl_order=2)
-
+    
     p_x = length(initial_alpha)
     q_z = length(initial_beta)
     j_g = length(initial_gamma)
     n_k = size(data, 1)
-    mic_para = min(n_k, 2000)
+    
+    if penalty == "scad"
+        penalty_deriv = scad_deriv
+    elseif penalty == "mic"
+        penalty_deriv = mic_para = min(n_k, 2000)
+    end
+
     
     x_names = ["x$(i)" for i in 0:(p_x-1)]
     X_mat = Matrix(data[:, x_names])
@@ -56,8 +62,9 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
         in_iters = 1
         out_iters = 500
     end
-    MAX_STEP = 0.3
 
+    MAX_STEP = 0.3
+    
     function evaluate_tuning_param(xi_1, xi_2)
         # MM Algorithm
         alpha_cur, beta_cur, gamma_cur = initial_alpha, initial_beta, initial_gamma
@@ -86,9 +93,9 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
             # Surrogate of penalties
             # P'(|beta_old_j|) / (|beta_old_j| + rho)
             rho = 1e-15
-            if penalty=="scad"
-                omega_alpha = [scad_deriv(a, xi_1) / (abs(a) + rho) for a in alpha_old]
-                omega_beta  = [scad_deriv(b, xi_2) / (abs(b) + rho) for b in beta_old]
+            if penalty=="scad" || penalty=="lasso"
+                omega_alpha = [penalty_deriv(a, xi_1) / (abs(a) + rho) for a in alpha_old]
+                omega_beta  = [penalty_deriv(b, xi_2) / (abs(b) + rho) for b in beta_old]
             end
             
             # --- M-Step Part 1: Update Alpha ---
@@ -107,8 +114,6 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 end
                 
                 eta = X_mat * a
-                # log(pi) = -log(1 + exp(-eta)) =  -log1pexp(-eta)
-                # log(1-pi) =  -eta + log(pi)
         
                 log_pi = -log1pexp.(-eta)
                 log_1_minus_pi = -eta .+ log_pi
@@ -116,7 +121,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 term_L1 = sum(W .* log_pi .+ (1.0 .- W) .* log_1_minus_pi)
 
                 term_pen = 0.0 
-                if penalty == "scad"
+                if penalty == "scad" || penalty=="lasso"
                     term_pen = - N_total * sum(0.5 .* omega_alpha .* (a.^2))
                 elseif penalty == "mic"
                     term_pen = -log(N_total) * pen_part
@@ -175,7 +180,7 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 
                 # Penalty on Beta
                 term_pen = 0.0 
-                if penalty == "scad"
+                if penalty == "scad" || penalty=="lasso"
                     term_pen = -N_total * sum(0.5 .* omega_beta .* (b.^2))
                 elseif penalty == "mic"
                     term_pen = -log(N_total) * pen_part
@@ -226,20 +231,22 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
                 end
             end
         end
+
         alpha_cur[abs.(alpha_cur) .< 1e-5] .= 0
         beta_cur[abs.(beta_cur) .< 1e-5] .= 0
+
         BIC_val = BayIC(alpha_cur, beta_cur, gamma_cur, n_k)
         return estimate_result(xi_1, xi_2, alpha_cur, beta_cur, gamma_cur, BIC_val)
     end
 
+    param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
+    param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
+
     if penalty == "none"
         best_result = evaluate_tuning_param(1.0, 1.0)
     elseif penalty == "mic"
-
         best_result = evaluate_tuning_param(mic_para, mic_para)
     elseif penalty == "scad"
-        param1 = [0.001, 0.005, 0.01, 0.05, 0.1]
-        param2 = [0.001, 0.005, 0.01, 0.05, 0.1]
         param_grid = collect(Base.Iterators.product(param1, param2)) |> vec
         tuning_results = [evaluate_tuning_param(xi_1, xi_2) for (xi_1, xi_2) in param_grid]
         if isempty(tuning_results)
@@ -252,7 +259,6 @@ function online_estimation(data, knots, initial_alpha, initial_beta, initial_gam
     best_alpha = best_result.alpha
     best_beta = best_result.beta
     best_gamma = best_result.gamma
-    # println(best_result.xi_1, ", ", best_result.xi_2, " => BIC: ", best_result.criterion)
 
     # Calculate new Hessian matrix
     H_current = log_likelihood(best_alpha, best_beta, best_gamma, data, knots; spl_order = spl_order, hess = true)

@@ -13,11 +13,6 @@ function scad_deriv(theta_val, lambda)
     end
 end
 
-function mic_deriv(theta_val, lambda)
-    abs_t = abs(theta_val)
-    return 8*lambda*abs_t*exp(2*lambda*abs_t^2)/(exp(2*lambda*abs_t^2)+1)^2
-end
-
 function safe_exp(x)
     return exp(clamp(x, -100, 100))
 end
@@ -149,4 +144,51 @@ function Mspline(x, spl_order, knots)
     end
     
     return rec_basis
+end
+
+
+function build_data(
+    df::DataFrame,
+    tobs::String,
+    status::String,
+    x_vars::Vector{String},
+    z_vars::Vector{String};
+    drop_vars::Vector{String} = String[]
+)
+    df_work = select(df, Not(intersect(names(df), drop_vars)))
+
+    n = nrow(df_work)
+    tobs_col = df_work[:, tobs]
+    status_col = df_work[:, status]
+
+    out = DataFrame(
+        tobs = tobs_col,
+        status = status_col,
+        x0 = ones(n)
+    )
+
+    for (j, v) in enumerate(x_vars)
+        @assert v in names(df_work) "x variable $v not found in dataframe"
+        out[!, "x$j"] = Float64.(df_work[:, v])
+    end
+
+    for (j, v) in enumerate(z_vars)
+        @assert v in names(df_work) "z variable $v not found in dataframe"
+        out[!, "z$j"] = Float64.(df_work[:, v])
+    end
+
+    return out
+end
+
+function calc_metrics(est::Vector{Float64}, true_val::Vector{Float64}; thresh = 1e-4)
+        
+    est_active = abs.(est) .> thresh
+    true_active = abs.(true_val) .> thresh
+    
+    tp = sum(est_active .& true_active)
+    fp = sum(est_active .& (.!true_active))
+    
+    mse = sum((est .- true_val).^2)
+    
+    return tp, fp, mse
 end
