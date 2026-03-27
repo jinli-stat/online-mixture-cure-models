@@ -22,6 +22,15 @@ This repository contains the Julia implementation for OMCM method in "Online Mix
 
 ---
 
+## Acknowledgments
+
+The spline function implementation in this repository is adapted from:
+
+> Qiu, M., & Hu, T. (2024). Bayesian transformation model for spatial partly interval-censored data. *Journal of Applied Statistics*, 51(11), 2139-2156.
+>
+
+---
+
 ## Installation & Setup
 
 1. Clone this repository:
@@ -99,7 +108,7 @@ alpha_hat, beta_hat, gamma_hat, stats = online_estimation(
 
 The following code reproduces the results for Table 2 with K=10 batches and MIC penalty.
 
-**Runtime**: Approximately 8 minutes on the authors' server (may vary based on hardware).
+**Runtime**: Approximately 7 minutes on the authors' server (may vary based on hardware).
 
 ```julia
 using ProgressMeter
@@ -182,3 +191,8 @@ pretty_table(summary_res)
 }
 ```
 
+---
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
