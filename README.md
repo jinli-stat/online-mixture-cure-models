@@ -1,9 +1,8 @@
 # Online Mixture Cure Models
 
-This repository contains the Julia implementation for OMCM method in "Online Mixture Cure Models for Large-scale Survival Data Streams" by JIN Li, HU Tao, and XIANG Liming.
+This repository contains the Julia implementation for OMCM method in "Online Updating Mixture Cure Models for Large‐Scale Survival Data Streams" by JIN Li, HU Tao, and XIANG Liming.
 
 ---
-
 
 ## Repository Structure
 
@@ -17,15 +16,6 @@ This repository contains the Julia implementation for OMCM method in "Online Mix
 │   └── utility_funcs.jl      # Helper functions
 └── README.md
 ```
-
----
-
-## Acknowledgments
-
-The splines implementation in this repository is adapted from:
-
-> Qiu, M., & Hu, T. (2024). Bayesian transformation model for spatial partly interval-censored data. *Journal of Applied Statistics*, 51(11), 2139-2156.
->
 
 ---
 
@@ -178,14 +168,26 @@ pretty_table(summary_res)
 
 ---
 
+## Acknowledgments
+
+The splines implementation in this repository is adapted from:
+
+> Qiu, M., & Hu, T. (2024). Bayesian transformation model for spatial partly interval-censored data. *Journal of Applied Statistics*, 51(11), 2139-2156.
+>
+
+---
+
 ## Citation
 
 ```bibtex
-@unpublished{jin2026submitted,
-  title   = {Online mixture cure models for large-scale survival data streams},
-  author  = {Jin, Li and Hu, Tao and Xiang, Liming},
-  year    = {2026},
-  note    = {Submitted for publication},
+@article{jin2026online,
+  title = {Online Updating Mixture Cure Models for Large‐Scale Survival Data Streams},
+  author = {Jin, Li and Hu, Tao and Xiang, Liming},
+  journal = {Statistics in Medicine},
+  year = {2026},
+  volume = {45},
+  number = {25-27},
+  pages = {e70795}
 }
 ```
 
